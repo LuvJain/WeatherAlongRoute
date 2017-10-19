@@ -20,7 +20,7 @@ export default class LandingPage extends Component {
     return (
       <View style={styles.container}>
         <Text style={styles.welcome}>
-          Welcome to Weather Along Route
+          Welcome to Weather Along RizRoute
         </Text>
         <TextInput style={styles.instructions}
           placeholder = "Starting Location"
