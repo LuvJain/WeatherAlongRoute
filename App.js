@@ -103,6 +103,8 @@ export default class LandingPage extends Component {
       startLocation: null,
       endLocation: null,
       isLoading: false,
+      isWeatherLoading: false,
+      weatherData: null,
       error: null,
       routeReady: false
     };
@@ -128,12 +130,65 @@ export default class LandingPage extends Component {
       startLocation: null,
       endLocation: null,
       routeReady: false,
+      weatherData: null,
       error: null
     });
   }
 
+  // Fetch weather data for locations
+  fetchWeatherData = async () => {
+    const { startLocation, endLocation } = this.state;
+
+    if (!startLocation || !endLocation) {
+      return;
+    }
+
+    this.setState({ isWeatherLoading: true });
+
+    try {
+      // In a real app, you would fetch data from a weather API using the API key
+      // For demonstration purposes, we'll simulate a fetch with setTimeout
+      const weatherApiKey = getEnvVars().WEATHER_API_KEY;
+
+      console.log(`Would fetch weather data with API key: ${weatherApiKey}`);
+      console.log(`For locations: ${startLocation.latitude},${startLocation.longitude} to ${endLocation.latitude},${endLocation.longitude}`);
+
+      // Simulate API request delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Mock weather data for demonstration
+      const mockWeatherData = {
+        startLocationWeather: {
+          temperature: Math.floor(Math.random() * 30) + 10, // Random temp between 10-40
+          condition: ['Sunny', 'Cloudy', 'Rainy', 'Partly Cloudy'][Math.floor(Math.random() * 4)],
+          humidity: Math.floor(Math.random() * 60) + 40, // Random humidity between 40-100
+        },
+        endLocationWeather: {
+          temperature: Math.floor(Math.random() * 30) + 10,
+          condition: ['Sunny', 'Cloudy', 'Rainy', 'Partly Cloudy'][Math.floor(Math.random() * 4)],
+          humidity: Math.floor(Math.random() * 60) + 40,
+        },
+        // Could include more points along route in a real implementation
+      };
+
+      this.setState({
+        weatherData: mockWeatherData,
+        isWeatherLoading: false,
+      });
+
+      return mockWeatherData;
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      this.setState({
+        error: 'Failed to fetch weather data. Please try again.',
+        isWeatherLoading: false
+      });
+      return null;
+    }
+  }
+
   // Function to get the route when both locations are selected
-  handleGetRoute = () => {
+  handleGetRoute = async () => {
     const { startLocation, endLocation } = this.state;
 
     if (!startLocation || !endLocation) {
@@ -145,17 +200,20 @@ export default class LandingPage extends Component {
 
     // For now just simulate a route calculation
     // In a real app, you would call a routing API here
-    setTimeout(() => {
+    setTimeout(async () => {
       console.log('Route calculated between:', startLocation, endLocation);
       this.setState({
         isLoading: false,
         routeReady: true
       });
+
+      // After route is calculated, fetch weather data
+      await this.fetchWeatherData();
     }, 1500);
   }
 
   render() {
-    const { startLocation, endLocation, isLoading, error, routeReady } = this.state;
+    const { startLocation, endLocation, isLoading, isWeatherLoading, weatherData, error, routeReady } = this.state;
 
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -234,9 +292,44 @@ export default class LandingPage extends Component {
                 <Text style={styles.routeReadyText}>
                   Route from {startLocation.name} to {endLocation.name} is ready!
                 </Text>
-                <Text style={styles.routeInfoText}>
-                  Weather information will be displayed along this route.
-                </Text>
+
+                {/* Weather data loading spinner */}
+                {isWeatherLoading ? (
+                  <View style={styles.weatherLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3498db" />
+                    <Text style={styles.weatherLoadingText}>
+                      Loading weather data...
+                    </Text>
+                  </View>
+                ) : weatherData ? (
+                  <View style={styles.weatherDataContainer}>
+                    <Text style={styles.weatherHeaderText}>Weather Information</Text>
+
+                    <View style={styles.weatherLocationContainer}>
+                      <Text style={styles.weatherLocationText}>Start: {startLocation.name}</Text>
+                      <Text style={styles.weatherDataText}>
+                        {weatherData.startLocationWeather.temperature}°C, {weatherData.startLocationWeather.condition}
+                      </Text>
+                      <Text style={styles.weatherDataText}>
+                        Humidity: {weatherData.startLocationWeather.humidity}%
+                      </Text>
+                    </View>
+
+                    <View style={styles.weatherLocationContainer}>
+                      <Text style={styles.weatherLocationText}>Destination: {endLocation.name}</Text>
+                      <Text style={styles.weatherDataText}>
+                        {weatherData.endLocationWeather.temperature}°C, {weatherData.endLocationWeather.condition}
+                      </Text>
+                      <Text style={styles.weatherDataText}>
+                        Humidity: {weatherData.endLocationWeather.humidity}%
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.routeInfoText}>
+                    Weather information will be displayed along this route.
+                  </Text>
+                )}
               </View>
             )}
           </View>
@@ -378,6 +471,55 @@ const styles = StyleSheet.create({
   routeInfoText: {
     fontSize: 14,
     color: '#2c3e50',
+  },
+  weatherLoadingContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+  },
+  weatherLoadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#3498db',
+    fontWeight: '500',
+  },
+  weatherDataContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+  },
+  weatherHeaderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2980b9',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  weatherLocationContainer: {
+    marginVertical: 8,
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  weatherLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#34495e',
+    marginBottom: 4,
+  },
+  weatherDataText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginVertical: 2,
   },
 });
 
