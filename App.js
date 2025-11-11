@@ -14,6 +14,27 @@ import {
 } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 
+// Import environment variables
+// Note: For React Native, we need to use Platform-specific imports
+import { Platform } from 'react-native';
+
+// Access environment variables based on platform
+const getEnvVars = () => {
+  // For web, we use process.env directly (dotenv loaded via webpack/react-scripts)
+  if (Platform.OS === 'web') {
+    return {
+      GOOGLE_PLACES_API_KEY: process.env.REACT_APP_GOOGLE_PLACES_API_KEY,
+      API_URL: process.env.REACT_APP_API_URL,
+    };
+  }
+  // For React Native, we would import from the .env file (using react-native-dotenv)
+  // This requires additional babel config not shown here
+  return {
+    GOOGLE_PLACES_API_KEY: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA', // Fallback for now
+    API_URL: 'http://localhost:3000',
+  };
+};
+
 
 
 const autocompleteComponent = (placeholder) => {
@@ -32,7 +53,7 @@ const autocompleteComponent = (placeholder) => {
           }}
           query={{
             // available options: https://developers.google.com/places/web-service/autocomplete
-            key: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA',
+            key: getEnvVars().GOOGLE_PLACES_API_KEY,
             language: 'en', // language of the results
             types: 'address', // default: 'geocode'
           }}
