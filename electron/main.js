@@ -7,43 +7,83 @@ const devicePresets = {
   iPhone12: {
     width: 390,
     height: 844,
-    label: 'iPhone 12'
+    label: 'iPhone 12',
+    scaleFactor: 1
   },
   iPhone8: {
     width: 375,
     height: 667,
-    label: 'iPhone 8'
+    label: 'iPhone 8',
+    scaleFactor: 1
   },
   Pixel5: {
     width: 393,
     height: 851,
-    label: 'Pixel 5'
+    label: 'Pixel 5',
+    scaleFactor: 1
   },
   SamsungGalaxyS20: {
     width: 360,
     height: 800,
-    label: 'Samsung Galaxy S20'
+    label: 'Samsung Galaxy S20',
+    scaleFactor: 1
+  }
+};
+
+// Desktop responsive modes
+const desktopPresets = {
+  responsive: {
+    width: 1200,
+    height: 800,
+    label: 'Responsive Desktop Mode',
+    scaleFactor: 1
+  },
+  smallDesktop: {
+    width: 992,
+    height: 700,
+    label: 'Small Desktop',
+    scaleFactor: 1
+  },
+  tablet: {
+    width: 768,
+    height: 1024,
+    label: 'Tablet',
+    scaleFactor: 1
   }
 };
 
 // Default device to use
 let currentDevice = devicePresets.iPhone12;
+let isResponsiveMode = false;
 
 // Keep a global reference of the window object to prevent garbage collection
 let mainWindow;
 
+// Create user preferences for window size
+const userPreferences = {
+  saveWindowSize: true,
+  windowBounds: { width: currentDevice.width, height: currentDevice.height }
+};
+
 function createWindow() {
-  // Create the browser window with mobile dimensions
+  // Create the browser window with mobile dimensions by default
+  // or use saved dimensions if available
   mainWindow = new BrowserWindow({
     width: currentDevice.width,
     height: currentDevice.height,
     minWidth: 320,
+    minHeight: 500,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
+      // Enable hardware acceleration for better performance
+      webSecurity: true,
+      experimentalFeatures: true
     },
     title: `Weather Along Route - ${currentDevice.label} Preview`,
-    resizable: true
+    resizable: true,
+    center: true,
+    show: false // Don't show until ready
   });
 
   // Load the app from webpack dev server in development
@@ -60,6 +100,16 @@ function createWindow() {
 
   mainWindow.loadURL(startUrl);
 
+  // Show window when ready to prevent flickering
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+
+    // Apply CSS zoom level if needed
+    if (currentDevice.scaleFactor !== 1) {
+      mainWindow.webContents.setZoomFactor(currentDevice.scaleFactor);
+    }
+  });
+
   // Open DevTools in development mode
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -68,9 +118,26 @@ function createWindow() {
   // Create device selection menu
   createMenu();
 
+  // Save window size on close if enabled
+  mainWindow.on('close', () => {
+    if (userPreferences.saveWindowSize) {
+      userPreferences.windowBounds = mainWindow.getBounds();
+    }
+  });
+
   // Emitted when the window is closed
   mainWindow.on('closed', function () {
     mainWindow = null;
+  });
+
+  // Listen for window resize events to update UI
+  mainWindow.on('resize', () => {
+    const [width, height] = mainWindow.getSize();
+    mainWindow.webContents.executeJavaScript(`
+      if (window.updateResponsiveLayout) {
+        window.updateResponsiveLayout(${width}, ${height});
+      }
+    `);
   });
 }
 
@@ -80,10 +147,21 @@ function createMenu() {
     return {
       label: devicePresets[key].label,
       click: () => {
-        changeDeviceDimensions(devicePresets[key]);
+        changeDeviceMode(devicePresets[key], false);
       },
       type: 'radio',
-      checked: devicePresets[key].label === currentDevice.label
+      checked: !isResponsiveMode && devicePresets[key].label === currentDevice.label
+    };
+  });
+
+  const desktopMenuItems = Object.keys(desktopPresets).map(key => {
+    return {
+      label: desktopPresets[key].label,
+      click: () => {
+        changeDeviceMode(desktopPresets[key], true);
+      },
+      type: 'radio',
+      checked: isResponsiveMode && desktopPresets[key].label === currentDevice.label
     };
   });
 
@@ -105,8 +183,34 @@ function createMenu() {
         { role: 'zoomout' },
         { type: 'separator' },
         {
-          label: 'Device Presets',
+          label: 'Mobile Device Presets',
           submenu: deviceMenuItems
+        },
+        {
+          label: 'Desktop Modes',
+          submenu: desktopMenuItems
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Full Responsive Mode',
+          click: () => {
+            toggleFullResponsiveMode();
+          },
+          type: 'checkbox',
+          checked: isResponsiveMode
+        }
+      ]
+    },
+    {
+      label: 'Settings',
+      submenu: [
+        {
+          label: 'Remember Window Size',
+          type: 'checkbox',
+          checked: userPreferences.saveWindowSize,
+          click: () => {
+            userPreferences.saveWindowSize = !userPreferences.saveWindowSize;
+          }
         }
       ]
     },
@@ -127,13 +231,48 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// Function to toggle between responsive mode and device preset mode
+function toggleFullResponsiveMode() {
+  if (isResponsiveMode) {
+    // Switch back to the previous device preset
+    isResponsiveMode = false;
+    changeDeviceMode(devicePresets.iPhone12, false);
+  } else {
+    // Switch to responsive mode
+    isResponsiveMode = true;
+    changeDeviceMode(desktopPresets.responsive, true);
+  }
+}
+
 // Function to change window dimensions based on device preset
-function changeDeviceDimensions(device) {
+function changeDeviceMode(device, responsive) {
   if (!mainWindow) return;
 
   currentDevice = device;
+  isResponsiveMode = responsive;
+
+  // Set window size
   mainWindow.setSize(device.width, device.height);
+  mainWindow.center();
+
+  // Update title
   mainWindow.setTitle(`Weather Along Route - ${device.label} Preview`);
+
+  // Apply zoom factor if specified
+  if (device.scaleFactor !== undefined) {
+    mainWindow.webContents.setZoomFactor(device.scaleFactor);
+  }
+
+  // Set CSS media mode via JavaScript
+  mainWindow.webContents.executeJavaScript(`
+    document.documentElement.classList.toggle('desktop-mode', ${responsive});
+    document.documentElement.classList.toggle('mobile-mode', ${!responsive});
+
+    // Let the app know about the mode change
+    if (window.setAppMode) {
+      window.setAppMode('${responsive ? 'desktop' : 'mobile'}', ${device.width}, ${device.height});
+    }
+  `);
 
   // Update menu to show the correct selection
   createMenu();

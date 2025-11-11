@@ -1,0 +1,129 @@
+/*
+ * responsive.css
+ * Responsive styling for desktop preview of the mobile app
+ */
+
+/* Base container styling */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0 auto;
+  transition: width 0.3s ease, max-width 0.3s ease;
+}
+
+/*
+ * Responsive breakpoints for desktop viewing
+ * These follow standard device sizes
+ */
+
+/* Extra small devices */
+@media (min-width: 320px) {
+  .app-container {
+    width: 100%;
+  }
+}
+
+/* Small devices (tablets, 768px and up) */
+@media (min-width: 768px) {
+  .app-container {
+    width: 414px; /* iPhone 12 Pro Max width */
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    border-radius: 20px;
+    overflow: hidden;
+    height: 90vh;
+    max-height: 896px; /* iPhone 12 Pro Max height */
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+  }
+}
+
+/* Medium devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+  .app-container {
+    width: 414px;
+  }
+}
+
+/* Large devices (large desktops, 1200px and up) */
+@media (min-width: 1200px) {
+  .app-container {
+    width: 414px;
+  }
+}
+
+/*
+ * Touch-to-mouse adaptations
+ * These improve the experience when using desktop input devices
+ */
+
+/* Make touch targets more obvious on desktop */
+button:hover,
+a:hover,
+.touchable-opacity:hover {
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+/* Add subtle hover effects to inputs */
+input:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+input:focus {
+  border-color: #1faadb;
+  outline: none;
+}
+
+/* Scrollbar styling for desktop */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Performance optimizations */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Improve animation performance */
+.app-container,
+.app-container * {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Google Places Autocomplete component overrides for desktop */
+.google-places-autocomplete__container {
+  max-width: 100%;
+  width: 100%;
+}
+
+.google-places-autocomplete__suggestion {
+  cursor: pointer;
+}
+
+.google-places-autocomplete__suggestion:hover {
+  background-color: rgba(31, 170, 219, 0.1);
+}
