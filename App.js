@@ -29,6 +29,8 @@ const getEnvVars = () => {
       GOOGLE_PLACES_API_KEY: process.env.REACT_APP_GOOGLE_PLACES_API_KEY,
       API_URL: process.env.REACT_APP_API_URL,
       WEATHER_API_KEY: process.env.REACT_APP_WEATHER_API_KEY,
+      WEATHER_API_URL: process.env.REACT_APP_WEATHER_API_URL,
+      WEATHER_API_UNITS: process.env.REACT_APP_WEATHER_API_UNITS,
     };
   }
   // For React Native, we would import from the .env file (using react-native-dotenv)
@@ -36,7 +38,9 @@ const getEnvVars = () => {
   return {
     GOOGLE_PLACES_API_KEY: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA', // Fallback for now
     API_URL: 'http://localhost:3000',
-    WEATHER_API_KEY: 'your_weather_api_key_here',
+    WEATHER_API_KEY: 'your_openweathermap_api_key_here',
+    WEATHER_API_URL: 'https://api.openweathermap.org/data/2.5',
+    WEATHER_API_UNITS: 'metric',
   };
 };
 
@@ -146,17 +150,35 @@ export default class LandingPage extends Component {
     this.setState({ isWeatherLoading: true });
 
     try {
-      // In a real app, you would fetch data from a weather API using the API key
-      // For demonstration purposes, we'll simulate a fetch with setTimeout
-      const weatherApiKey = getEnvVars().WEATHER_API_KEY;
+      // Get environment variables for OpenWeatherMap API
+      const env = getEnvVars();
+      const weatherApiKey = env.WEATHER_API_KEY;
+      const weatherApiUrl = env.WEATHER_API_URL;
+      const weatherApiUnits = env.WEATHER_API_UNITS || 'metric';
 
-      console.log(`Would fetch weather data with API key: ${weatherApiKey}`);
+      console.log(`Fetching weather data with API key: ${weatherApiKey}`);
       console.log(`For locations: ${startLocation.latitude},${startLocation.longitude} to ${endLocation.latitude},${endLocation.longitude}`);
+
+      // In a production app, these would be actual API calls to OpenWeatherMap
+      // For now, we'll simulate the calls to avoid exposing real API keys
+
+      // For demonstration purposes, we'll still use mock data
+      // but show how the API call would be constructed
+
+      // The API endpoints would be:
+      // Start location: ${weatherApiUrl}/weather?lat=${startLocation.latitude}&lon=${startLocation.longitude}&appid=${weatherApiKey}&units=${weatherApiUnits}
+      // End location: ${weatherApiUrl}/weather?lat=${endLocation.latitude}&lon=${endLocation.longitude}&appid=${weatherApiKey}&units=${weatherApiUnits}
+
+      console.log('Start location API URL:',
+        `${weatherApiUrl}/weather?lat=${startLocation.latitude}&lon=${startLocation.longitude}&appid=API_KEY_HIDDEN&units=${weatherApiUnits}`);
+      console.log('End location API URL:',
+        `${weatherApiUrl}/weather?lat=${endLocation.latitude}&lon=${endLocation.longitude}&appid=API_KEY_HIDDEN&units=${weatherApiUnits}`);
 
       // Simulate API request delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Mock weather data for demonstration
+      // In a real implementation, this would be replaced with actual API responses
       const mockWeatherData = {
         startLocationWeather: {
           temperature: Math.floor(Math.random() * 30) + 10, // Random temp between 10-40
