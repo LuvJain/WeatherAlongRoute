@@ -1,3 +1,13 @@
 {
-  "presets": ["react-native"]
+  "presets": ["react-native"],
+  "plugins": [
+    ["module:react-native-dotenv", {
+      "moduleName": "react-native-dotenv",
+      "path": ".env",
+      "blacklist": null,
+      "whitelist": null,
+      "safe": false,
+      "allowUndefined": true
+    }]
+  ]
 }
