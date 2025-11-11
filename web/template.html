@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Weather Along Route</title>
+    <style>
+        html, body, #root {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #F5FCFF;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        /* Override for mobile styling */
+        input, button {
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 0;
+        }
+        /* Hide scrollbars but allow scrolling on mobile */
+        @media (max-width: 767px) {
+            ::-webkit-scrollbar {
+                display: none;
+            }
+        }
+        /* Prevent text scaling */
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
+        /* Desktop mode container */
+        @media (min-width: 768px) {
+            #root {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+                background-color: #f0f0f0;
+                overflow: auto;
+            }
+
+            /* Add device frame in desktop mode */
+            .device-frame {
+                position: relative;
+                border-radius: 20px;
+                overflow: hidden;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+                background: #111;
+            }
+
+            /* Desktop container styles */
+            .desktop-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        /* Desktop input adaptations */
+        @media (min-width: 768px) {
+            input:focus,
+            textarea:focus,
+            select:focus {
+                outline: none;
+                border-color: #1faadb;
+            }
+
+            /* Make clickable items more obvious */
+            button,
+            [role="button"],
+            .touchable-opacity,
+            a {
+                cursor: pointer;
+                transition: opacity 0.2s ease;
+            }
+
+            button:hover,
+            [role="button"]:hover,
+            .touchable-opacity:hover,
+            a:hover {
+                opacity: 0.8;
+            }
+        }
+
+        /* Responsive breakpoint utility classes */
+        html[data-breakpoint="xs"] .hide-xs,
+        html[data-breakpoint="sm"] .hide-sm,
+        html[data-breakpoint="md"] .hide-md,
+        html[data-breakpoint="lg"] .hide-lg,
+        html[data-breakpoint="xl"] .hide-xl {
+            display: none !important;
+        }
+
+        /* Performance optimizations */
+        .desktop-mode * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Hardware acceleration for smoother animations */
+        .app-container {
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+    </style>
+    <!-- Import responsive CSS -->
+    <link rel="stylesheet" href="responsive.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        // Touch-to-mouse event translation for desktop
+        document.addEventListener('DOMContentLoaded', function() {
+            // Only apply these adaptations on desktop devices
+            if (window.matchMedia('(min-width: 768px)').matches) {
+                // Wrap the app root in a device frame container on desktop
+                const rootEl = document.getElementById('root');
+                const reactRoot = document.createElement('div');
+                reactRoot.id = 'react-root';
+                reactRoot.className = 'app-container';
+
+                // Move all content to the new container
+                while (rootEl.firstChild) {
+                    reactRoot.appendChild(rootEl.firstChild);
+                }
+
+                rootEl.appendChild(reactRoot);
+            }
+        });
+
+        // Add touchstart event for mobile/touch devices
+        // This removes the 300ms tap delay on mobile devices
+        document.addEventListener('touchstart', function() {}, {passive: true});
+    </script>
+
+    <!-- Load responsive breakpoints handler -->
+    <script src="responsive-breakpoints.js"></script>
+</body>
+</html>
