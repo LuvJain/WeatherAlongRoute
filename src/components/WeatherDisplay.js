@@ -12,8 +12,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Dimensions,
+  Platform
 } from 'react-native';
 import WeatherDataManager from '../services/WeatherDataManager';
+
+// Get device dimensions for responsive design
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 600; // Simple tablet detection
 
 class WeatherDisplay extends Component {
   constructor(props) {
@@ -171,9 +177,23 @@ class WeatherDisplay extends Component {
       return null;
     }
 
+    // Format date for last updated display
+    const lastUpdated = new Date();
+    const formattedDate = lastUpdated.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     return (
       <View style={styles.weatherContainer}>
-        <Text style={styles.locationName}>{currentWeather.name}, {currentWeather.sys.country}</Text>
+        <View style={styles.locationHeader}>
+          <Text style={styles.locationName}>{currentWeather.name}, {currentWeather.sys.country}</Text>
+          <Text style={styles.lastUpdated}>Last updated: {formattedDate}</Text>
+        </View>
 
         <View style={styles.weatherMain}>
           <View style={styles.temperatureContainer}>
@@ -183,6 +203,14 @@ class WeatherDisplay extends Component {
             <Text style={styles.feelsLike}>
               Feels like: {this.formatTemperature(currentWeather.main.feels_like)}
             </Text>
+            <View style={styles.minMaxContainer}>
+              <Text style={styles.minMaxTemp}>
+                H: {this.formatTemperature(currentWeather.main.temp_max)}
+              </Text>
+              <Text style={styles.minMaxTemp}>
+                L: {this.formatTemperature(currentWeather.main.temp_min)}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.conditionContainer}>
@@ -201,26 +229,81 @@ class WeatherDisplay extends Component {
 
         <View style={styles.detailsContainer}>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Humidity:</Text>
+            <Text style={styles.detailLabel}>Humidity</Text>
             <Text style={styles.detailValue}>{currentWeather.main.humidity}%</Text>
           </View>
 
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Wind:</Text>
+            <Text style={styles.detailLabel}>Wind</Text>
             <Text style={styles.detailValue}>
               {currentWeather.wind.speed} m/s
             </Text>
           </View>
 
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Pressure:</Text>
+            <Text style={styles.detailLabel}>Pressure</Text>
             <Text style={styles.detailValue}>
               {currentWeather.main.pressure} hPa
             </Text>
           </View>
+
+          {currentWeather.visibility && (
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Visibility</Text>
+              <Text style={styles.detailValue}>
+                {(currentWeather.visibility / 1000).toFixed(1)} km
+              </Text>
+            </View>
+          )}
         </View>
+
+        {currentWeather.rain && (
+          <View style={styles.precipitationContainer}>
+            <Text style={styles.precipitationTitle}>Precipitation (last 3h)</Text>
+            <Text style={styles.precipitationValue}>
+              {currentWeather.rain['3h'] || currentWeather.rain['1h'] || 0} mm
+            </Text>
+          </View>
+        )}
       </View>
     );
+  };
+
+  /**
+   * Calculate daily summary from hourly forecasts
+   * @param {Array} items - Hourly forecast items for a day
+   * @returns {Object} - Summary object with min/max temps and dominant weather condition
+   */
+  calculateDailySummary = (items) => {
+    // Initialize with the first item
+    let minTemp = items[0].main.temp;
+    let maxTemp = items[0].main.temp;
+
+    // Count occurrences of each weather condition to find the dominant one
+    const weatherCounts = {};
+    let dominantWeather = null;
+    let maxCount = 0;
+
+    items.forEach(item => {
+      // Update min/max temperatures
+      minTemp = Math.min(minTemp, item.main.temp);
+      maxTemp = Math.max(maxTemp, item.main.temp);
+
+      // Count weather conditions
+      const weatherId = item.weather[0].id;
+      weatherCounts[weatherId] = (weatherCounts[weatherId] || 0) + 1;
+
+      if (weatherCounts[weatherId] > maxCount) {
+        maxCount = weatherCounts[weatherId];
+        dominantWeather = item.weather[0];
+      }
+    });
+
+    return {
+      minTemp,
+      maxTemp,
+      weatherCondition: dominantWeather
+    };
   };
 
   /**
@@ -243,11 +326,56 @@ class WeatherDisplay extends Component {
       groupedForecast[date].push(item);
     });
 
+    // Get only the first 5 days for 5-day forecast
+    const fiveDayForecast = Object.entries(groupedForecast).slice(0, 5);
+
     return (
       <View style={styles.forecastContainer}>
         <Text style={styles.forecastTitle}>5-Day Forecast</Text>
+
+        {/* Daily summary view */}
+        <View style={styles.dailySummaryContainer}>
+          {fiveDayForecast.map(([date, items]) => {
+            const summary = this.calculateDailySummary(items);
+            const dateObj = new Date(items[0].dt * 1000);
+
+            return (
+              <View key={date} style={styles.dailySummaryItem}>
+                <Text style={styles.dailySummaryDay}>
+                  {dateObj.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                  })}
+                </Text>
+                <Text style={styles.dailySummaryDate}>
+                  {dateObj.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <Image
+                  source={{ uri: this.getWeatherIconUrl(summary.weatherCondition.icon) }}
+                  style={styles.dailySummaryIcon}
+                />
+                <Text style={styles.dailySummaryDescription}>
+                  {summary.weatherCondition.main}
+                </Text>
+                <View style={styles.dailySummaryTemps}>
+                  <Text style={styles.dailySummaryHighTemp}>
+                    {this.formatTemperature(summary.maxTemp)}
+                  </Text>
+                  <Text style={styles.dailySummaryLowTemp}>
+                    {this.formatTemperature(summary.minTemp)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Detailed hourly forecast */}
+        <Text style={styles.hourlyForecastTitle}>Hourly Forecast</Text>
         <ScrollView horizontal={false} style={styles.forecastScroll}>
-          {Object.entries(groupedForecast).map(([date, items]) => (
+          {fiveDayForecast.map(([date, items]) => (
             <View key={date} style={styles.forecastDay}>
               <Text style={styles.forecastDate}>
                 {new Date(items[0].dt * 1000).toLocaleDateString('en-US', {
@@ -273,9 +401,17 @@ class WeatherDisplay extends Component {
                     <Text style={styles.forecastTemp}>
                       {this.formatTemperature(item.main.temp)}
                     </Text>
-                    <Text style={styles.forecastDescription}>
-                      {item.weather[0].description}
-                    </Text>
+                    <View style={styles.forecastDetails}>
+                      <Text style={styles.forecastDescription}>
+                        {item.weather[0].description}
+                      </Text>
+                      <Text style={styles.forecastHumidity}>
+                        Humidity: {item.main.humidity}%
+                      </Text>
+                      <Text style={styles.forecastWind}>
+                        Wind: {item.wind.speed} m/s
+                      </Text>
+                    </View>
                   </View>
                 ))}
               </ScrollView>
@@ -303,10 +439,21 @@ class WeatherDisplay extends Component {
     if (error) {
       return (
         <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorText}>Error: {error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={this.handleRefresh}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
+          <View style={styles.errorActions}>
+            <TouchableOpacity style={styles.retryButton} onPress={this.handleRefresh}>
+              <Text style={styles.retryButtonText}>Refresh Data</Text>
+            </TouchableOpacity>
+          </View>
+          {this.state.currentWeather && this.state.currentWeather.isExpiredCache && (
+            <View style={styles.expiredCacheNotice}>
+              <Text style={styles.expiredCacheText}>
+                Showing cached data from previous search.
+                Network connection is required for the latest data.
+              </Text>
+            </View>
+          )}
         </View>
       );
     }
@@ -359,6 +506,7 @@ class WeatherDisplay extends Component {
 }
 
 const styles = StyleSheet.create({
+  // Base Styles
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -379,21 +527,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#fff5f5',
+    margin: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ffcccc',
+  },
+  errorIcon: {
+    fontSize: 36,
+    marginBottom: 15,
   },
   errorText: {
     marginBottom: 20,
-    fontSize: 16,
-    color: '#ff0000',
+    fontSize: isTablet ? 18 : 16,
+    color: '#e74c3c',
     textAlign: 'center',
+    fontWeight: '500',
+  },
+  errorActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   retryButton: {
-    padding: 10,
-    backgroundColor: '#007AFF',
+    padding: 12,
+    backgroundColor: '#3498db',
     borderRadius: 5,
+    minWidth: 120,
+    alignItems: 'center',
   },
   retryButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
+    fontWeight: '600',
+  },
+  expiredCacheNotice: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    width: '100%',
+  },
+  expiredCacheText: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
   },
   noLocationContainer: {
     flex: 1,
@@ -406,20 +585,30 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
+
+  // Toggle Controls
   toggleContainer: {
     flexDirection: 'row',
     marginVertical: 10,
     paddingHorizontal: 20,
+    backgroundColor: 'white',
+    borderRadius: isTablet ? 10 : 0,
+    marginHorizontal: isTablet ? 15 : 0,
+    shadowColor: isTablet ? '#000' : 'transparent',
+    shadowOffset: isTablet ? { width: 0, height: 2 } : { width: 0, height: 0 },
+    shadowOpacity: isTablet ? 0.1 : 0,
+    shadowRadius: isTablet ? 4 : 0,
+    elevation: isTablet ? 3 : 0,
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 12,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   activeToggle: {
-    borderBottomColor: '#007AFF',
+    borderBottomColor: '#3498db',
   },
   toggleText: {
     fontSize: 16,
@@ -436,8 +625,10 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   refreshButtonText: {
-    color: '#007AFF',
+    color: '#3498db',
   },
+
+  // Current Weather Section
   weatherContainer: {
     margin: 15,
     borderRadius: 10,
@@ -449,66 +640,106 @@ const styles = StyleSheet.create({
     elevation: 3,
     padding: 15,
   },
+  locationHeader: {
+    marginBottom: 15,
+  },
   locationName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 15,
+  },
+  lastUpdated: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 5,
   },
   weatherMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
+    ...(isTablet && { paddingHorizontal: 20 }),
   },
   temperatureContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   temperature: {
-    fontSize: 40,
+    fontSize: isTablet ? 60 : 42,
     fontWeight: 'bold',
+    color: '#333',
   },
   feelsLike: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     color: '#666',
+    marginTop: 5,
+  },
+  minMaxContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  minMaxTemp: {
+    fontSize: isTablet ? 16 : 14,
+    color: '#666',
+    marginRight: 10,
   },
   conditionContainer: {
     flex: 1,
     alignItems: 'center',
   },
   weatherIcon: {
-    width: 80,
-    height: 80,
+    width: isTablet ? 100 : 80,
+    height: isTablet ? 100 : 80,
   },
   weatherCondition: {
-    fontSize: 20,
+    fontSize: isTablet ? 24 : 20,
     fontWeight: '500',
   },
   weatherDescription: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     color: '#666',
     textAlign: 'center',
   },
   detailsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
     paddingTop: 15,
   },
   detailItem: {
-    flex: 1,
+    width: isTablet ? '25%' : '50%',
     alignItems: 'center',
+    marginBottom: 15,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     color: '#666',
     marginBottom: 5,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '500',
   },
+  precipitationContainer: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#f0f7ff',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  precipitationTitle: {
+    fontSize: isTablet ? 16 : 14,
+    color: '#3498db',
+    marginBottom: 5,
+  },
+  precipitationValue: {
+    fontSize: isTablet ? 18 : 16,
+    fontWeight: '500',
+  },
+
+  // Forecast Section
   forecastContainer: {
     margin: 15,
     borderRadius: 10,
@@ -522,48 +753,132 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   forecastTitle: {
-    fontSize: 20,
+    fontSize: isTablet ? 24 : 20,
     fontWeight: 'bold',
     marginBottom: 15,
     textAlign: 'center',
   },
+
+  // Daily summary section (new)
+  dailySummaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    borderRadius: 8,
+    marginBottom: 20,
+    backgroundColor: '#f9f9f9',
+  },
+  dailySummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#f0f0f0',
+  },
+  dailySummaryDay: {
+    fontSize: isTablet ? 16 : 14,
+    fontWeight: 'bold',
+  },
+  dailySummaryDate: {
+    fontSize: isTablet ? 14 : 12,
+    color: '#666',
+    marginBottom: 5,
+  },
+  dailySummaryIcon: {
+    width: isTablet ? 60 : 40,
+    height: isTablet ? 60 : 40,
+  },
+  dailySummaryDescription: {
+    fontSize: isTablet ? 14 : 12,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  dailySummaryTemps: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  dailySummaryHighTemp: {
+    fontSize: isTablet ? 16 : 14,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginRight: 5,
+  },
+  dailySummaryLowTemp: {
+    fontSize: isTablet ? 16 : 14,
+    color: '#3498db',
+  },
+
+  // Hourly forecast section
+  hourlyForecastTitle: {
+    fontSize: isTablet ? 20 : 18,
+    fontWeight: '600',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 5,
+  },
   forecastScroll: {
     flex: 1,
+    maxHeight: isTablet ? 500 : 400,
   },
   forecastDay: {
     marginBottom: 20,
   },
   forecastDate: {
-    fontSize: 18,
+    fontSize: isTablet ? 18 : 16,
     fontWeight: '600',
     marginBottom: 10,
+    color: '#34495e',
   },
   forecastItem: {
-    padding: 10,
+    padding: isTablet ? 15 : 10,
     alignItems: 'center',
     marginRight: 15,
-    minWidth: 80,
+    minWidth: isTablet ? 110 : 90,
     backgroundColor: '#f9f9f9',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   forecastTime: {
-    fontSize: 14,
+    fontSize: isTablet ? 16 : 14,
     marginBottom: 5,
+    fontWeight: '500',
   },
   forecastIcon: {
-    width: 50,
-    height: 50,
+    width: isTablet ? 60 : 50,
+    height: isTablet ? 60 : 50,
   },
   forecastTemp: {
-    fontSize: 18,
+    fontSize: isTablet ? 20 : 18,
     fontWeight: '500',
+    marginVertical: 5,
+    color: '#333',
+  },
+  forecastDetails: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 5,
     marginTop: 5,
+    width: '100%',
   },
   forecastDescription: {
-    fontSize: 12,
+    fontSize: isTablet ? 14 : 12,
     color: '#666',
     textAlign: 'center',
-    marginTop: 5,
+    marginBottom: 5,
+  },
+  forecastHumidity: {
+    fontSize: isTablet ? 12 : 10,
+    color: '#3498db',
+    marginBottom: 3,
+  },
+  forecastWind: {
+    fontSize: isTablet ? 12 : 10,
+    color: '#7f8c8d',
   },
 });
 
