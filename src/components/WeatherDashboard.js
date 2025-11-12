@@ -16,11 +16,13 @@ import {
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import AsyncStorage from '@react-native-community/async-storage';
 import WeatherDisplay from './WeatherDisplay';
 import WeatherDataManager from '../services/WeatherDataManager';
+import GeoLocationService, { GEO_PREFERENCES } from '../services/GeoLocationService';
 
 // Constants
 const STORAGE_KEY = 'weather_dashboard_last_search';
@@ -37,20 +39,94 @@ class WeatherDashboard extends Component {
       error: null,
       lastSearched: null,
       isZipCode: false,
-      weatherData: null
+      weatherData: null,
+      geoLocationStatus: null,
+      isGeoLocating: false,
+      geoLocationEnabled: false,
+      geoLocationError: null
     };
   }
 
   componentDidMount() {
-    // Load the last searched location when component mounts and pre-populate
-    this.loadLastSearchedLocation()
+    // Check if geolocation is supported
+    const isGeoSupported = GeoLocationService.isSupported();
+    this.setState({ geoLocationStatus: isGeoSupported ? 'supported' : 'unsupported' });
+
+    // First check for geolocation preferences
+    this.checkGeoLocationPreferences()
       .then(() => {
-        // Automatically search with the last location if one exists
-        if (this.state.lastSearched && this.state.searchQuery) {
-          // Give a slight delay to allow UI to render first
-          setTimeout(() => this.handleSearch(), 500);
+        // If geolocation is enabled, use it
+        if (this.state.geoLocationEnabled) {
+          // Try to use geolocation
+          this.handleGetCurrentLocation();
+        } else {
+          // Otherwise, fall back to the last searched location
+          return this.loadLastSearchedLocation()
+            .then(() => {
+              // Automatically search with the last location if one exists
+              if (this.state.lastSearched && this.state.searchQuery) {
+                // Give a slight delay to allow UI to render first
+                setTimeout(() => this.handleSearch(), 500);
+              }
+            });
         }
       });
+  }
+
+  /**
+   * Check user's geolocation preferences
+   * @returns {Promise<void>}
+   */
+  async checkGeoLocationPreferences() {
+    try {
+      // Get user's preference
+      const preference = await GeoLocationService.getUserPreference();
+
+      // Set geolocation status based on preference
+      switch (preference) {
+        case GEO_PREFERENCES.ENABLED:
+          this.setState({
+            geoLocationEnabled: true,
+            geoLocationStatus: 'enabled'
+          });
+          break;
+        case GEO_PREFERENCES.DISABLED:
+          this.setState({
+            geoLocationEnabled: false,
+            geoLocationStatus: 'disabled'
+          });
+          break;
+        case GEO_PREFERENCES.DENIED:
+          this.setState({
+            geoLocationEnabled: false,
+            geoLocationStatus: 'denied'
+          });
+          break;
+        case GEO_PREFERENCES.UNAVAILABLE:
+          this.setState({
+            geoLocationEnabled: false,
+            geoLocationStatus: 'unsupported'
+          });
+          break;
+        default:
+          // If unset, we'll ask for permission when user requests it
+          this.setState({
+            geoLocationEnabled: false,
+            geoLocationStatus: 'unset'
+          });
+      }
+
+      // Also check if there's a cached location
+      const lastLocation = await GeoLocationService.getLastLocation();
+      if (lastLocation && this.state.geoLocationEnabled) {
+        // We have a cached location and geolocation is enabled
+        this.setState({
+          geoLocationLastCoords: lastLocation,
+        });
+      }
+    } catch (error) {
+      console.error('Error checking geolocation preferences:', error);
+    }
   }
 
   /**
@@ -256,14 +332,224 @@ class WeatherDashboard extends Component {
   };
 
   /**
+   * Toggle geolocation on/off
+   */
+  handleToggleGeolocation = () => {
+    if (this.state.geoLocationEnabled) {
+      // Disable geolocation
+      this.setState({
+        geoLocationEnabled: false,
+        geoLocationStatus: 'disabled'
+      });
+      GeoLocationService.saveUserPreference(GEO_PREFERENCES.DISABLED);
+    } else {
+      // Request geolocation permission
+      this.requestGeolocationPermission();
+    }
+  };
+
+  /**
+   * Request geolocation permission from the user
+   */
+  requestGeolocationPermission = async () => {
+    if (!GeoLocationService.isSupported()) {
+      Alert.alert(
+        'Geolocation Not Supported',
+        'Your device or browser does not support geolocation.',
+        [{ text: 'OK', onPress: () => {} }]
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    Alert.alert(
+      'Use Current Location',
+      'This will use your current location to provide local weather information. Would you like to continue?',
+      [
+        {
+          text: 'No',
+          onPress: () => {
+            // User manually declined
+            this.setState({
+              geoLocationEnabled: false,
+              geoLocationStatus: 'disabled'
+            });
+            GeoLocationService.saveUserPreference(GEO_PREFERENCES.DISABLED);
+          },
+          style: 'cancel'
+        },
+        {
+          text: 'Yes',
+          onPress: () => this.handleGetCurrentLocation()
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+
+  /**
+   * Get the current location and fetch weather
+   */
+  handleGetCurrentLocation = () => {
+    this.setState({
+      isGeoLocating: true,
+      geoLocationError: null,
+      error: null
+    });
+
+    GeoLocationService.getCurrentPosition()
+      .then(location => {
+        // Successfully got location
+        this.setState({
+          isGeoLocating: false,
+          geoLocationEnabled: true,
+          geoLocationStatus: 'enabled',
+          geoLocationLastCoords: location
+        });
+
+        // Get weather for the current location
+        this.getWeatherByCoordinates(location);
+      })
+      .catch(error => {
+        console.error('Geolocation error:', error);
+
+        // Handle specific error cases
+        if (error.code === 1) {
+          // Permission denied by user or browser
+          this.setState({
+            isGeoLocating: false,
+            geoLocationEnabled: false,
+            geoLocationStatus: 'denied',
+            geoLocationError: error.message || 'Location permission denied'
+          });
+        } else {
+          // Other errors (timeout, position unavailable, etc.)
+          this.setState({
+            isGeoLocating: false,
+            geoLocationError: error.message || 'Failed to get current location'
+          });
+        }
+
+        // Fall back to last searched location if available
+        if (this.state.lastSearched && this.state.searchQuery) {
+          setTimeout(() => this.handleSearch(), 500);
+        }
+      });
+  };
+
+  /**
+   * Fetch weather data using coordinates
+   * @param {Object} location - The location object with coordinates
+   */
+  getWeatherByCoordinates = async (location) => {
+    this.setState({
+      isLoading: true,
+      error: null,
+      weatherData: null
+    });
+
+    try {
+      // Convert location to API parameters
+      const locationParams = GeoLocationService.locationToApiParams(location);
+
+      // Get both current weather and forecast
+      const data = await WeatherDataManager.getWeatherAndForecast(locationParams);
+
+      // Validate the response data
+      if (!data.current || !data.forecast) {
+        throw new Error('Invalid data received from weather service');
+      }
+
+      // Create a location object similar to the format expected by WeatherDisplay
+      const locationObj = {
+        name: data.current.name,
+        // Include coordinates for refresh
+        lat: location.latitude,
+        lon: location.longitude,
+        isGeoLocation: true
+      };
+
+      // Update state with the weather data and location
+      this.setState({
+        selectedLocation: locationObj,
+        isLoading: false,
+        weatherData: data,
+        error: null // Clear any previous errors
+      });
+    } catch (error) {
+      console.error('Error fetching weather by coordinates:', error);
+
+      // Get user-friendly error message
+      const errorMessage = this.getErrorMessage(error);
+
+      this.setState({
+        isLoading: false,
+        error: errorMessage,
+        weatherData: null
+      });
+    }
+  };
+
+  /**
    * Render the location search section
    */
   renderSearchSection = () => {
-    const { searchQuery, isLoading, error, lastSearched } = this.state;
+    const {
+      searchQuery,
+      isLoading,
+      error,
+      lastSearched,
+      geoLocationStatus,
+      geoLocationEnabled,
+      isGeoLocating,
+      geoLocationError
+    } = this.state;
+
+    // Determine geolocation button text based on status
+    let geoButtonText = 'Use My Location';
+    let geoButtonIcon = '📍';
+
+    if (isGeoLocating) {
+      geoButtonText = 'Getting Location...';
+      geoButtonIcon = '⏳';
+    } else if (geoLocationEnabled) {
+      geoButtonText = 'Location Enabled';
+      geoButtonIcon = '✅';
+    } else if (geoLocationStatus === 'denied') {
+      geoButtonText = 'Location Access Denied';
+      geoButtonIcon = '🚫';
+    } else if (geoLocationStatus === 'unsupported') {
+      geoButtonText = 'Location Not Supported';
+      geoButtonIcon = '❌';
+    }
 
     return (
       <View style={styles.searchSection}>
         <Text style={styles.sectionTitle}>Weather Search</Text>
+
+        {/* Geolocation button */}
+        <TouchableOpacity
+          style={[
+            styles.geoLocationButton,
+            geoLocationEnabled && styles.geoLocationButtonActive,
+            geoLocationStatus === 'denied' && styles.geoLocationButtonDenied,
+            geoLocationStatus === 'unsupported' && styles.geoLocationButtonDisabled
+          ]}
+          onPress={this.handleToggleGeolocation}
+          disabled={isGeoLocating || geoLocationStatus === 'unsupported'}
+        >
+          <Text style={styles.geoLocationIcon}>{geoButtonIcon}</Text>
+          <Text style={styles.geoLocationButtonText}>{geoButtonText}</Text>
+        </TouchableOpacity>
+
+        {geoLocationError && (
+          <View style={styles.geoLocationErrorContainer}>
+            <Text style={styles.geoLocationErrorText}>{geoLocationError}</Text>
+          </View>
+        )}
+
+        {/* Manual search section */}
+        <Text style={styles.searchSubtitle}>Or enter a location manually:</Text>
 
         <View style={styles.searchInputContainer}>
           <TextInput
@@ -332,8 +618,33 @@ class WeatherDashboard extends Component {
     );
   };
 
+  renderWeatherSection = () => {
+    const { selectedLocation, weatherData, geoLocationEnabled } = this.state;
+
+    if (!selectedLocation || !weatherData) {
+      return null;
+    }
+
+    return (
+      <View style={styles.weatherContainer}>
+        {/* Location refresh button for geolocation */}
+        {selectedLocation.isGeoLocation && geoLocationEnabled && (
+          <TouchableOpacity
+            style={styles.refreshLocationButton}
+            onPress={this.handleGetCurrentLocation}
+          >
+            <Text style={styles.refreshLocationIcon}>🔄</Text>
+            <Text style={styles.refreshLocationText}>Refresh Location</Text>
+          </TouchableOpacity>
+        )}
+
+        <WeatherDisplay location={selectedLocation} />
+      </View>
+    );
+  };
+
   render() {
-    const { selectedLocation, weatherData } = this.state;
+    const { selectedLocation, weatherData, isLoading } = this.state;
 
     return (
       <SafeAreaView style={styles.container}>
@@ -355,7 +666,7 @@ class WeatherDashboard extends Component {
             {selectedLocation && (
               <View style={styles.weatherContainer}>
                 {weatherData ? (
-                  <WeatherDisplay location={selectedLocation} />
+                  this.renderWeatherSection()
                 ) : (
                   <ActivityIndicator size="large" color="#0000ff" />
                 )}
@@ -409,6 +720,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 15,
+  },
+  searchSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#555',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  // Geolocation button styles
+  geoLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 10,
+  },
+  geoLocationButtonActive: {
+    backgroundColor: '#e6f7ff',
+    borderColor: '#91d5ff',
+  },
+  geoLocationButtonDenied: {
+    backgroundColor: '#fff1f0',
+    borderColor: '#ffa39e',
+  },
+  geoLocationButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#d9d9d9',
+    opacity: 0.6,
+  },
+  geoLocationIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  geoLocationButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  geoLocationErrorContainer: {
+    padding: 10,
+    backgroundColor: '#fff1f0',
+    borderRadius: 5,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#ffa39e',
+  },
+  geoLocationErrorText: {
+    color: '#cf1322',
+    fontSize: 13,
   },
   searchInputContainer: {
     flexDirection: 'row',
@@ -507,6 +870,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginBottom: 15,
   },
+  refreshLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e6f7ff',
+    padding: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#91d5ff',
+    marginBottom: 15,
+  },
+  refreshLocationIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  refreshLocationText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#096dd9',
+  },
   // Media queries for responsive design
   '@media (min-width: 600px)': {
     contentContainer: {
@@ -525,6 +908,9 @@ const styles = StyleSheet.create({
     searchButton: {
       paddingHorizontal: 20,
     },
+    geoLocationButton: {
+      padding: 15,
+    }
   },
 });
 
