@@ -1,0 +1,88 @@
+# Netlify configuration file
+# This file configures how Netlify builds and deploys your site
+
+[build]
+  # Base directory
+  base = "/"
+
+  # Directory that contains the deploy-ready HTML files
+  publish = "build"
+
+  # Default build command
+  command = "npm run build-web"
+
+# Production context: all deploys from the main branch
+# will inherit these settings
+[context.production]
+  environment = { NODE_ENV = "production" }
+
+# Deploy Preview context: all deploys generated from
+# pull/merge requests will inherit these settings
+[context.deploy-preview]
+  command = "npm run build-web"
+
+# Branch Deploy context: All deploys that are not from
+# a pull/merge request or from the production branch
+# will inherit these settings.
+[context.branch-deploy]
+  command = "npm run build-web"
+
+# Specific branch context: Deploys from this branch
+# will take these settings and override their
+# current ones.
+[context.master] # 'master' is the branch name
+  command = "npm run build-web"
+  environment = { NODE_ENV = "production" }
+
+# Redirect /api requests to the backend API service
+# Uncomment and configure when you have an API backend
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://api.example.com/:splat"
+#   status = 200
+#   force = true
+
+# Redirect all paths to index.html for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for caching and security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Cache control settings
+    Cache-Control = "public, max-age=86400"
+    # Security headers
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self' https://*.googleapis.com https://*.gstatic.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://*.googleapis.com; connect-src 'self' https://*.googleapis.com;"
+
+# Performance optimization for assets
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
