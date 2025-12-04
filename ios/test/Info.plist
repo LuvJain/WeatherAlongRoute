@@ -39,7 +39,9 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>This app requires access to your location to show your position on the map and provide route directions.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app requires access to your location to show your position on the map and provide route directions.</string>
 	<key>NSAppTransportSecurity</key>
 	<!--See http://ste.vn/2015/06/10/configuring-app-transport-security-ios-9-osx-10-11/ -->
 	<dict>
