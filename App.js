@@ -1,7 +1,6 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
- * @flow
+ * Weather Along Route App
+ * Route input interface with map integration
  */
 
 import React, { Component } from 'react';
@@ -10,95 +9,71 @@ import {
   StyleSheet,
   Text,
   View,
-  TextInput
+  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import RouteInput from './src/components/RouteInput';
 
+export default class WeatherAlongRoute extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      selectedRoute: null,
+    };
+  }
 
+  handleRouteSelected = (routeData) => {
+    this.setState({ selectedRoute: routeData });
+    console.log('Route selected:', routeData);
 
-const autocompleteComponent = (placeholder) => {
-  return (<GooglePlacesAutocomplete
-          placeholder={placeholder}
-          minLength={2} // minimum length of text to search
-          autoFocus={false}
-          fetchDetails={true}
-          onPress={(data, details = null) => { // 'details' is provided when fetchDetails = true
-          // handle using statekey either starting or ending loc here
-            console.log(data);
-            console.log(details);
-          }}
-          getDefaultValue={() => {
-            return ''; // text input default value
-          }}
-          query={{
-            // available options: https://developers.google.com/places/web-service/autocomplete
-            key: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA',
-            language: 'en', // language of the results
-            types: 'address', // default: 'geocode'
-          }}
-          styles={{
-            description: {
-              fontWeight: 'bold',
-            },
-            predefinedPlacesDescription: {
-              color: '#1faadb',
-            },
-          }}
+    // Here you would typically fetch weather data along the route
+    // or navigate to a details screen
+  }
 
-          currentLocation={true} // Will add a 'Current location' button at the top of the predefined places list
-          currentLocationLabel="Current location"
-          nearbyPlacesAPI='GooglePlacesSearch' // Which API to use: GoogleReverseGeocoding or GooglePlacesSearch
-          GoogleReverseGeocodingQuery={{
-            // available options for GoogleReverseGeocoding API : https://developers.google.com/maps/documentation/geocoding/intro
-          }}
-          GooglePlacesSearchQuery={{
-            // available options for GooglePlacesSearch API : https://developers.google.com/places/web-service/search
-            rankby: 'distance',
-          }}
-        />)
-}
-
-
-export default class LandingPage extends Component {
   render() {
     return (
-      <View style={styles.container}>
-      <Text style={styles.welcome}>
-        Welcome to Weather Along RizRoute
-      </Text>
-      <View style={styles.autoContainer}>
-        {autocompleteComponent('Starting Location')}
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F5FCFF" />
 
-        {autocompleteComponent('Final Destination')}
-      </View>
-      </View>
-    )
+        <View style={styles.headerContainer}>
+          <Text style={styles.welcome}>
+            Weather Along Route
+          </Text>
+          <Text style={styles.subtitle}>
+            Plan your journey with weather insights
+          </Text>
+        </View>
+
+        <RouteInput onRouteSelected={this.handleRouteSelected} />
+      </SafeAreaView>
+    );
   }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#F5FCFF',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  autoContainer: {
-    alignItems: 'baseline',
-    height: '20%',
+  headerContainer: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
-  textInputContainer: {
-    backgroundColor: 'black',
-    borderTopWidth: 500,
-    borderBottomWidth: 0
+  welcome: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
   },
-  textInput: {
-
-  },
-  predefinedPlacesDescription: {
-    color: '#1faadb',
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 
-AppRegistry.registerComponent('WeatherAlongRoute', () => LandingPage);
-AppRegistry.registerComponent('autocompleteComponent', (placeholder) => LandingPage);
+// Register the app component
+AppRegistry.registerComponent('WeatherAlongRoute', () => WeatherAlongRoute);
+AppRegistry.registerComponent('test', () => WeatherAlongRoute);
