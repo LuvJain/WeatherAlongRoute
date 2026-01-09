@@ -1,10 +1,11 @@
 // @flow
 
 import React, { Component } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import type { RouteSegment, StopPoint, DetectionConfig } from '../models/GeoTypes';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Geolocation } from 'react-native';
+import type { RouteSegment, StopPoint, DetectionConfig, Coordinate } from '../models/GeoTypes';
 import { detectStopPoints, getDefaultConfig } from '../services/stopPointDetector';
 import { weatherService, type WeatherData } from '../weatherService';
+import { routeProgressTracker, type RouteProgress, type DriverLocation } from '../services/routeProgressTracker';
 import StopPointConfigPanel from './StopPointConfigPanel';
 import StopPointWeatherDisplay from './StopPointWeatherDisplay';
 
@@ -19,6 +20,10 @@ type State = {
   isLoading: boolean,
   error: ?string,
   offlineMode: boolean,
+  driverLocation: ?DriverLocation,
+  routeProgress: ?RouteProgress,
+  geolocationError: ?string,
+  geolocationWatchId: ?number,
 };
 
 /**
@@ -35,6 +40,10 @@ export default class RouteScreen extends Component<Props, State> {
       isLoading: false,
       error: null,
       offlineMode: false,
+      driverLocation: null,
+      routeProgress: null,
+      geolocationError: null,
+      geolocationWatchId: null,
     };
   }
 
@@ -44,6 +53,15 @@ export default class RouteScreen extends Component<Props, State> {
   componentDidMount() {
     this.loadCacheAndInitialize();
     this.detectAndFetchWeather();
+    this.startGeolocationTracking();
+  }
+
+  /**
+   * Cleanup geolocation listener on unmount
+   */
+  componentWillUnmount() {
+    this.stopGeolocationTracking();
+    routeProgressTracker.reset();
   }
 
   /**
@@ -145,8 +163,123 @@ export default class RouteScreen extends Component<Props, State> {
     }
   };
 
+  /**
+   * Start watching driver location
+   */
+  startGeolocationTracking = () => {
+    try {
+      const watchId = Geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const driverLocation: DriverLocation = {
+            latitude,
+            longitude,
+            timestamp: position.timestamp,
+          };
+
+          this.handleLocationUpdate(driverLocation);
+        },
+        (error) => {
+          console.warn('Geolocation error:', error);
+          this.setState({ geolocationError: error.message });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+
+      this.setState({ geolocationWatchId: watchId });
+    } catch (error) {
+      console.warn('Failed to start geolocation tracking:', error);
+      this.setState({ geolocationError: 'Failed to start location tracking' });
+    }
+  };
+
+  /**
+   * Stop watching driver location
+   */
+  stopGeolocationTracking = () => {
+    const { geolocationWatchId } = this.state;
+    if (geolocationWatchId !== null && geolocationWatchId !== undefined) {
+      Geolocation.clearWatch(geolocationWatchId);
+      this.setState({ geolocationWatchId: null });
+    }
+  };
+
+  /**
+   * Handle driver location update
+   */
+  handleLocationUpdate = async (driverLocation: DriverLocation) => {
+    const { stopPoints, routeProgress } = this.state;
+
+    // Initialize route progress tracker if not already done
+    if (stopPoints.length > 0 && !routeProgress) {
+      const startPoint = this.props.route[0]?.startPoint;
+      if (startPoint) {
+        routeProgressTracker.initialize(startPoint, stopPoints);
+      }
+    }
+
+    try {
+      // Calculate updated progress
+      const progress = routeProgressTracker.updateProgress(driverLocation);
+
+      this.setState({
+        driverLocation,
+        routeProgress: progress,
+      });
+
+      // Refresh weather for upcoming stops within lookahead distance
+      await this.refreshWeatherForUpcomingStops(progress);
+    } catch (error) {
+      console.warn('Error updating route progress:', error);
+    }
+  };
+
+  /**
+   * Refresh weather data for stops within lookahead distance
+   */
+  refreshWeatherForUpcomingStops = async (progress: RouteProgress) => {
+    const upcomingStops = routeProgressTracker.getUpcomingStopsForWeather(progress);
+
+    if (upcomingStops.length > 0) {
+      const stopIds = upcomingStops.map((stop) => stop.id);
+
+      try {
+        const weather = await weatherService.getWeather(stopIds);
+
+        // Update weather data with new results
+        this.setState((prevState) => ({
+          weatherData: {
+            ...prevState.weatherData,
+            ...weather,
+          },
+        }));
+      } catch (error) {
+        console.warn('Failed to refresh weather for upcoming stops:', error);
+      }
+    }
+  };
+
   render() {
-    const { stopPoints, weatherData, isLoading, error, offlineMode, detectionConfig } = this.state;
+    const {
+      stopPoints,
+      weatherData,
+      isLoading,
+      error,
+      offlineMode,
+      detectionConfig,
+      routeProgress,
+      driverLocation,
+      geolocationError,
+    } = this.state;
+
+    const upcomingStops = routeProgress?.remainingStops || [];
+    const nextStop = routeProgress?.nextStop;
+    const distanceToNextStop = routeProgress?.distanceToNextStop || 0;
+    const eta = routeProgress?.eta;
 
     return (
       <ScrollView style={styles.container}>
@@ -157,6 +290,54 @@ export default class RouteScreen extends Component<Props, State> {
           config={detectionConfig}
           onConfigChange={this.handleConfigChange}
         />
+
+        {/* Driver Location Indicator */}
+        {driverLocation && (
+          <View style={styles.locationContainer}>
+            <Text style={styles.locationTitle}>📍 Current Location</Text>
+            <Text style={styles.locationText}>
+              {driverLocation.latitude.toFixed(4)}°N, {Math.abs(driverLocation.longitude).toFixed(4)}°W
+            </Text>
+          </View>
+        )}
+
+        {/* Geolocation Error */}
+        {geolocationError && (
+          <View style={styles.geolocationErrorContainer}>
+            <Text style={styles.geolocationErrorText}>⚠️ {geolocationError}</Text>
+          </View>
+        )}
+
+        {/* Next Stop Highlight */}
+        {nextStop && (
+          <View style={styles.nextStopContainer}>
+            <Text style={styles.nextStopLabel}>🎯 Next Stop</Text>
+            <View style={styles.nextStopContent}>
+              <View>
+                <Text style={styles.nextStopId}>{nextStop.id}</Text>
+                <Text style={styles.nextStopCoords}>
+                  {nextStop.coordinate.latitude.toFixed(4)}°N, {Math.abs(nextStop.coordinate.longitude).toFixed(4)}°W
+                </Text>
+              </View>
+              <View style={styles.nextStopStats}>
+                <View style={styles.nextStopStat}>
+                  <Text style={styles.nextStopStatLabel}>Distance</Text>
+                  <Text style={styles.nextStopStatValue}>
+                    {(distanceToNextStop / 1000).toFixed(1)} km
+                  </Text>
+                </View>
+                {eta && (
+                  <View style={styles.nextStopStat}>
+                    <Text style={styles.nextStopStatLabel}>ETA</Text>
+                    <Text style={styles.nextStopStatValue}>
+                      {Math.round(eta / 60)} min
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -186,24 +367,29 @@ export default class RouteScreen extends Component<Props, State> {
           </View>
         )}
 
-        {/* Stop Points List */}
-        {stopPoints.length > 0 ? (
+        {/* Upcoming Stop Points List */}
+        {upcomingStops.length > 0 ? (
           <View style={styles.stopPointsContainer}>
-            <Text style={styles.sectionTitle}>Detected Stop Points ({stopPoints.length})</Text>
-            {stopPoints.map((stop) => (
+            <Text style={styles.sectionTitle}>Upcoming Stops ({upcomingStops.length})</Text>
+            {upcomingStops.map((stop, index) => (
               <StopPointWeatherDisplay
                 key={stop.id}
                 stopPoint={stop}
                 weather={weatherData[stop.id]}
                 isOffline={offlineMode}
+                isNextStop={index === 0}
               />
             ))}
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No stop points detected</Text>
+            <Text style={styles.emptyText}>
+              {stopPoints.length > 0 ? 'All stops completed!' : 'No stop points detected'}
+            </Text>
             <Text style={styles.emptySubtext}>
-              Adjust the detection settings or provide a longer route
+              {stopPoints.length > 0
+                ? 'You have completed all stops on this route'
+                : 'Adjust the detection settings or provide a longer route'}
             </Text>
           </View>
         )}
@@ -292,5 +478,84 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 13,
     color: '#bbb',
+  },
+  locationContainer: {
+    backgroundColor: '#e3f2fd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196f3',
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 4,
+  },
+  locationTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1565c0',
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#0d47a1',
+    fontFamily: 'Menlo',
+  },
+  geolocationErrorContainer: {
+    backgroundColor: '#ffebee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#e53935',
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 4,
+  },
+  geolocationErrorText: {
+    fontSize: 13,
+    color: '#c62828',
+  },
+  nextStopContainer: {
+    backgroundColor: '#fff9c4',
+    borderLeftWidth: 4,
+    borderLeftColor: '#fbc02d',
+    padding: 14,
+    marginBottom: 16,
+    borderRadius: 4,
+  },
+  nextStopLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#f57f17',
+    marginBottom: 8,
+  },
+  nextStopContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  nextStopId: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  nextStopCoords: {
+    fontSize: 11,
+    color: '#666',
+    fontFamily: 'Menlo',
+  },
+  nextStopStats: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  nextStopStat: {
+    alignItems: 'flex-end',
+  },
+  nextStopStatLabel: {
+    fontSize: 10,
+    color: '#999',
+    marginBottom: 2,
+    fontWeight: '600',
+  },
+  nextStopStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f57f17',
   },
 });
