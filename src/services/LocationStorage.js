@@ -131,6 +131,47 @@ class LocationStorage {
       return 0;
     }
   }
+
+  /**
+   * Update a location in storage
+   * @param location - Location object to update
+   * @returns Promise<RecentLocation>
+   */
+  static async updateLocation(location: Location): Promise<RecentLocation> {
+    try {
+      const recentLocations = await this.getRecentLocations();
+      const index = recentLocations.findIndex((loc) => loc.id === location.id);
+
+      if (index !== -1) {
+        const updated = {
+          ...recentLocations[index],
+          ...location
+        };
+        recentLocations[index] = updated;
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(recentLocations));
+        return updated;
+      }
+
+      throw new Error(`Location with id ${location.id} not found`);
+    } catch (error) {
+      console.error('Error updating location:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set all locations at once (for bulk updates)
+   * @param locations - Array of locations to set
+   * @returns Promise<void>
+   */
+  static async setAllLocations(locations: RecentLocation[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(locations));
+    } catch (error) {
+      console.error('Error setting all locations:', error);
+      throw error;
+    }
+  }
 }
 
 export default LocationStorage;
