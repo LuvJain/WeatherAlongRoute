@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import LocationStorage from '../services/LocationStorage';
+import LocationValidationService from '../services/LocationValidationService';
 import type { Location, RecentLocation } from '../models/Location';
 
 const GOOGLE_PLACES_API_KEY = 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA';
@@ -39,6 +40,8 @@ type State = {
  */
 class LocationInput extends Component<Props, State> {
   autocompleteRef: ?any;
+  unsubscribeFromOnlineStatus: ?(() => void);
+  unsubscribeFromLocationUpdates: ?(() => void);
 
   static defaultProps = {
     placeholder: 'Enter destination',
@@ -59,7 +62,52 @@ class LocationInput extends Component<Props, State> {
 
   componentDidMount() {
     this.loadRecentLocations();
+    this.initializeValidationService();
   }
+
+  componentWillUnmount() {
+    this.cleanupValidationService();
+  }
+
+  /**
+   * Initialize location validation service
+   */
+  initializeValidationService = (): void => {
+    try {
+      // Initialize the validation service
+      LocationValidationService.initialize();
+
+      // Subscribe to online status changes
+      this.unsubscribeFromOnlineStatus =
+        LocationValidationService.subscribeToOnlineStatus((isOnline) => {
+          this.setState({ isOnline });
+        });
+
+      // Subscribe to location validation updates
+      this.unsubscribeFromLocationUpdates =
+        LocationValidationService.subscribeToLocationUpdates(
+          (validatedLocation) => {
+            // Update recent locations when a location is validated
+            this.loadRecentLocations();
+          }
+        );
+    } catch (error) {
+      console.warn('Failed to initialize validation service:', error);
+    }
+  };
+
+  /**
+   * Cleanup validation service subscriptions
+   */
+  cleanupValidationService = (): void => {
+    if (this.unsubscribeFromOnlineStatus) {
+      this.unsubscribeFromOnlineStatus();
+    }
+    if (this.unsubscribeFromLocationUpdates) {
+      this.unsubscribeFromLocationUpdates();
+    }
+    LocationValidationService.cleanup();
+  };
 
   /**
    * Load recent locations from storage
