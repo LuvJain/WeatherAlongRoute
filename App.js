@@ -13,6 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import LocationInputContainer from './components/LocationInputContainer';
+import LocationValidationService from './services/LocationValidationService';
 import type { Location } from './models/Location';
 
 const GOOGLE_API_KEY = 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA';
@@ -22,17 +23,39 @@ export default class LandingPage extends Component<
   {
     startingLocation: ?Location,
     destinationLocation: ?Location,
+    isOnline: boolean,
   }
 > {
   startingLocationRef: ?any;
   destinationLocationRef: ?any;
+  unsubscribeFromValidationService: ?() => void;
 
   constructor(props: {}) {
     super(props);
     this.state = {
       startingLocation: null,
       destinationLocation: null,
+      isOnline: true,
     };
+  }
+
+  componentDidMount() {
+    // Initialize the LocationValidationService
+    LocationValidationService.initialize();
+
+    // Subscribe to online/offline state changes
+    this.unsubscribeFromValidationService = LocationValidationService.subscribe(
+      (isOnline: boolean) => {
+        this.setState({ isOnline });
+      }
+    );
+  }
+
+  componentWillUnmount() {
+    // Unsubscribe from validation service
+    if (this.unsubscribeFromValidationService) {
+      this.unsubscribeFromValidationService();
+    }
   }
 
   /**
@@ -41,6 +64,13 @@ export default class LandingPage extends Component<
   handleStartingLocationSelect = (location: Location) => {
     this.setState({ startingLocation: location });
     console.log('Starting location selected:', location);
+
+    // Add to validation queue if not already validated
+    if (!location.validated) {
+      LocationValidationService.addPendingLocation(location).catch((error) => {
+        console.warn('Error adding starting location to validation queue:', error);
+      });
+    }
   };
 
   /**
@@ -49,14 +79,33 @@ export default class LandingPage extends Component<
   handleDestinationLocationSelect = (location: Location) => {
     this.setState({ destinationLocation: location });
     console.log('Destination location selected:', location);
+
+    // Add to validation queue if not already validated
+    if (!location.validated) {
+      LocationValidationService.addPendingLocation(location).catch((error) => {
+        console.warn('Error adding destination location to validation queue:', error);
+      });
+    }
   };
 
   render() {
-    const { startingLocation, destinationLocation } = this.state;
+    const { startingLocation, destinationLocation, isOnline } = this.state;
 
     return (
       <ScrollView style={styles.container}>
         <Text style={styles.welcome}>Welcome to Weather Along RizRoute</Text>
+
+        {/* Online/Offline Status Badge */}
+        <View
+          style={[
+            styles.statusBadge,
+            isOnline ? styles.statusOnline : styles.statusOffline,
+          ]}
+        >
+          <Text style={styles.statusText}>
+            {isOnline ? '✓ Online' : '⚠ Offline'}
+          </Text>
+        </View>
 
         {/* Starting Location Input */}
         <View style={styles.sectionContainer}>
@@ -186,6 +235,30 @@ const styles = StyleSheet.create({
   summaryCoords: {
     fontSize: 12,
     color: '#999999',
+  },
+  statusBadge: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusOnline: {
+    backgroundColor: '#E8F5E9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  statusOffline: {
+    backgroundColor: '#FFEBEE',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333333',
   },
 });
 
