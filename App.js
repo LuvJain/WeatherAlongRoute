@@ -10,95 +10,203 @@ import {
   StyleSheet,
   Text,
   View,
-  TextInput
+  TextInput,
+  ScrollView,
 } from 'react-native';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import LocationInput from './src/components/LocationInput';
+import type { Location } from './src/models/Location';
 
+type State = {
+  startLocation: ?Location,
+  endLocation: ?Location,
+};
 
+export default class WeatherAlongRoute extends Component<{}, State> {
+  constructor(props: any) {
+    super(props);
 
-const autocompleteComponent = (placeholder) => {
-  return (<GooglePlacesAutocomplete
-          placeholder={placeholder}
-          minLength={2} // minimum length of text to search
-          autoFocus={false}
-          fetchDetails={true}
-          onPress={(data, details = null) => { // 'details' is provided when fetchDetails = true
-          // handle using statekey either starting or ending loc here
-            console.log(data);
-            console.log(details);
-          }}
-          getDefaultValue={() => {
-            return ''; // text input default value
-          }}
-          query={{
-            // available options: https://developers.google.com/places/web-service/autocomplete
-            key: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA',
-            language: 'en', // language of the results
-            types: 'address', // default: 'geocode'
-          }}
-          styles={{
-            description: {
-              fontWeight: 'bold',
-            },
-            predefinedPlacesDescription: {
-              color: '#1faadb',
-            },
-          }}
+    this.state = {
+      startLocation: null,
+      endLocation: null,
+    };
+  }
 
-          currentLocation={true} // Will add a 'Current location' button at the top of the predefined places list
-          currentLocationLabel="Current location"
-          nearbyPlacesAPI='GooglePlacesSearch' // Which API to use: GoogleReverseGeocoding or GooglePlacesSearch
-          GoogleReverseGeocodingQuery={{
-            // available options for GoogleReverseGeocoding API : https://developers.google.com/maps/documentation/geocoding/intro
-          }}
-          GooglePlacesSearchQuery={{
-            // available options for GooglePlacesSearch API : https://developers.google.com/places/web-service/search
-            rankby: 'distance',
-          }}
-        />)
-}
+  /**
+   * Handle starting location selection
+   */
+  handleStartLocationSelect = (location: Location) => {
+    this.setState({ startLocation: location });
+    console.log('Start location selected:', location);
+  };
 
+  /**
+   * Handle ending location selection
+   */
+  handleEndLocationSelect = (location: Location) => {
+    this.setState({ endLocation: location });
+    console.log('End location selected:', location);
+  };
 
-export default class LandingPage extends Component {
   render() {
-    return (
-      <View style={styles.container}>
-      <Text style={styles.welcome}>
-        Welcome to Weather Along RizRoute
-      </Text>
-      <View style={styles.autoContainer}>
-        {autocompleteComponent('Starting Location')}
+    const { startLocation, endLocation } = this.state;
 
-        {autocompleteComponent('Final Destination')}
-      </View>
-      </View>
-    )
+    return (
+      <ScrollView style={styles.container}>
+        <Text style={styles.welcome}>
+          Welcome to Weather Along RizRoute
+        </Text>
+        <Text style={styles.subtitle}>
+          Select your starting location and destination
+        </Text>
+
+        {/* Starting Location Input */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Starting Location</Text>
+          <LocationInput
+            placeholder="Enter starting location"
+            onLocationSelect={this.handleStartLocationSelect}
+          />
+        </View>
+
+        {/* Selected Starting Location */}
+        {startLocation && (
+          <View style={styles.selectedInfoContainer}>
+            <Text style={styles.selectedLabel}>
+              Selected Start:
+            </Text>
+            <Text style={styles.selectedName}>{startLocation.name}</Text>
+            <Text style={styles.selectedAddress}>
+              {startLocation.address}
+            </Text>
+            <Text style={styles.validationIndicator}>
+              {startLocation.validated ? '✓ Validated' : '⚠ Pending Validation'}
+            </Text>
+          </View>
+        )}
+
+        {/* Ending Location Input */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Destination</Text>
+          <LocationInput
+            placeholder="Enter destination"
+            onLocationSelect={this.handleEndLocationSelect}
+          />
+        </View>
+
+        {/* Selected Ending Location */}
+        {endLocation && (
+          <View style={styles.selectedInfoContainer}>
+            <Text style={styles.selectedLabel}>
+              Selected Destination:
+            </Text>
+            <Text style={styles.selectedName}>{endLocation.name}</Text>
+            <Text style={styles.selectedAddress}>
+              {endLocation.address}
+            </Text>
+            <Text style={styles.validationIndicator}>
+              {endLocation.validated ? '✓ Validated' : '⚠ Pending Validation'}
+            </Text>
+          </View>
+        )}
+
+        {/* Ready Status */}
+        {startLocation && endLocation && (
+          <View style={styles.readyContainer}>
+            <Text style={styles.readyText}>
+              ✓ Ready to check weather along route
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    );
   }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#F5FCFF',
   },
-  autoContainer: {
-    alignItems: 'baseline',
-    height: '20%',
+  welcome: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginTop: 24,
+    marginBottom: 8,
   },
-  textInputContainer: {
-    backgroundColor: 'black',
-    borderTopWidth: 500,
-    borderBottomWidth: 0
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 16,
   },
-  textInput: {
-
+  sectionContainer: {
+    marginVertical: 12,
+    marginHorizontal: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  predefinedPlacesDescription: {
-    color: '#1faadb',
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  selectedInfoContainer: {
+    marginHorizontal: 12,
+    marginVertical: 8,
+    padding: 12,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+  },
+  selectedLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  selectedName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 4,
+  },
+  selectedAddress: {
+    fontSize: 13,
+    color: '#558b2f',
+    marginBottom: 8,
+  },
+  validationIndicator: {
+    fontSize: 12,
+    color: '#689f38',
+    fontWeight: '500',
+  },
+  readyContainer: {
+    marginHorizontal: 12,
+    marginVertical: 24,
+    padding: 16,
+    backgroundColor: '#c8e6c9',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2e7d32',
+    alignItems: 'center',
+  },
+  readyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1b5e20',
   },
 });
 
-AppRegistry.registerComponent('WeatherAlongRoute', () => LandingPage);
-AppRegistry.registerComponent('autocompleteComponent', (placeholder) => LandingPage);
+AppRegistry.registerComponent('WeatherAlongRoute', () => WeatherAlongRoute);
