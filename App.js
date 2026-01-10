@@ -13,6 +13,7 @@ import {
   ScrollView
 } from 'react-native';
 import { LocationInput } from './components/LocationInput';
+import { LocationValidationService } from './services/LocationValidation';
 import type { Location } from './models/Location';
 
 /**
@@ -23,6 +24,8 @@ export default class LandingPage extends Component {
   startLocationRef: any;
   endLocationRef: any;
 
+  validationService: LocationValidationService;
+
   constructor(props: any) {
     super(props);
     this.state = {
@@ -31,6 +34,19 @@ export default class LandingPage extends Component {
       startLocationValidated: false,
       endLocationValidated: false
     };
+    this.validationService = LocationValidationService.getInstance();
+  }
+
+  componentDidMount() {
+    // Start background validation service
+    this.validationService.start().catch(error => {
+      console.error('Failed to start validation service:', error);
+    });
+  }
+
+  componentWillUnmount() {
+    // Stop background validation service
+    this.validationService.stop();
   }
 
   _handleStartLocationSelect = (location: Location) => {
