@@ -1,0 +1,13 @@
+# Browsers that we support
+
+# For production
+[production]
+>0.2%
+not dead
+not op_mini all
+
+# For development
+[development]
+last 1 chrome version
+last 1 firefox version
+last 1 safari version
