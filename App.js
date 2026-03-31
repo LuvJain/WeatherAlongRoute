@@ -10,95 +10,168 @@ import {
   StyleSheet,
   Text,
   View,
-  TextInput
+  ScrollView
 } from 'react-native';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { LocationInput } from './components/LocationInput';
+import { LocationValidationService } from './services/LocationValidation';
+import type { Location } from './models/Location';
 
-
-
-const autocompleteComponent = (placeholder) => {
-  return (<GooglePlacesAutocomplete
-          placeholder={placeholder}
-          minLength={2} // minimum length of text to search
-          autoFocus={false}
-          fetchDetails={true}
-          onPress={(data, details = null) => { // 'details' is provided when fetchDetails = true
-          // handle using statekey either starting or ending loc here
-            console.log(data);
-            console.log(details);
-          }}
-          getDefaultValue={() => {
-            return ''; // text input default value
-          }}
-          query={{
-            // available options: https://developers.google.com/places/web-service/autocomplete
-            key: 'AIzaSyC0yi3ANsevOhdv-2FN_w67TfznwAYY1pA',
-            language: 'en', // language of the results
-            types: 'address', // default: 'geocode'
-          }}
-          styles={{
-            description: {
-              fontWeight: 'bold',
-            },
-            predefinedPlacesDescription: {
-              color: '#1faadb',
-            },
-          }}
-
-          currentLocation={true} // Will add a 'Current location' button at the top of the predefined places list
-          currentLocationLabel="Current location"
-          nearbyPlacesAPI='GooglePlacesSearch' // Which API to use: GoogleReverseGeocoding or GooglePlacesSearch
-          GoogleReverseGeocodingQuery={{
-            // available options for GoogleReverseGeocoding API : https://developers.google.com/maps/documentation/geocoding/intro
-          }}
-          GooglePlacesSearchQuery={{
-            // available options for GooglePlacesSearch API : https://developers.google.com/places/web-service/search
-            rankby: 'distance',
-          }}
-        />)
-}
-
-
+/**
+ * LandingPage Component
+ * Main application component with LocationInput for start and end locations
+ */
 export default class LandingPage extends Component {
+  startLocationRef: any;
+  endLocationRef: any;
+
+  validationService: LocationValidationService;
+
+  constructor(props: any) {
+    super(props);
+    this.state = {
+      startLocation: null,
+      endLocation: null,
+      startLocationValidated: false,
+      endLocationValidated: false
+    };
+    this.validationService = LocationValidationService.getInstance();
+  }
+
+  componentDidMount() {
+    // Start background validation service
+    this.validationService.start().catch(error => {
+      console.error('Failed to start validation service:', error);
+    });
+  }
+
+  componentWillUnmount() {
+    // Stop background validation service
+    this.validationService.stop();
+  }
+
+  _handleStartLocationSelect = (location: Location) => {
+    this.setState({
+      startLocation: location
+    });
+    console.log('Start location selected:', location);
+  };
+
+  _handleEndLocationSelect = (location: Location) => {
+    this.setState({
+      endLocation: location
+    });
+    console.log('End location selected:', location);
+  };
+
+  _handleStartLocationValidation = (validated: boolean) => {
+    this.setState({
+      startLocationValidated: validated
+    });
+  };
+
+  _handleEndLocationValidation = (validated: boolean) => {
+    this.setState({
+      endLocationValidated: validated
+    });
+  };
+
+  _handleSubmit = () => {
+    const { startLocation, endLocation } = this.state;
+
+    if (startLocation && endLocation) {
+      console.log('Route submitted:', {
+        startLocation,
+        endLocation
+      });
+      // Handle route submission here
+    } else {
+      console.warn('Both locations must be selected');
+    }
+  };
+
   render() {
+    const { startLocationValidated, endLocationValidated } = this.state;
+
     return (
       <View style={styles.container}>
-      <Text style={styles.welcome}>
-        Welcome to Weather Along RizRoute
-      </Text>
-      <View style={styles.autoContainer}>
-        {autocompleteComponent('Starting Location')}
+        <ScrollView style={styles.scrollContainer}>
+          <Text style={styles.welcome}>
+            Welcome to Weather Along RizRoute
+          </Text>
 
-        {autocompleteComponent('Final Destination')}
+          <Text style={styles.sectionTitle}>Starting Location</Text>
+          <LocationInput
+            ref={(ref) => {
+              this.startLocationRef = ref;
+            }}
+            placeholder="Enter starting location..."
+            onLocationSelect={this._handleStartLocationSelect}
+            onValidationChange={this._handleStartLocationValidation}
+            allowOfflineSubmission={true}
+          />
+
+          <Text style={styles.sectionTitle}>Final Destination</Text>
+          <LocationInput
+            ref={(ref) => {
+              this.endLocationRef = ref;
+            }}
+            placeholder="Enter final destination..."
+            onLocationSelect={this._handleEndLocationSelect}
+            onValidationChange={this._handleEndLocationValidation}
+            allowOfflineSubmission={true}
+          />
+
+          {startLocationValidated && endLocationValidated && (
+            <View style={styles.submitPrompt}>
+              <Text style={styles.submitPromptText}>
+                ✓ Both locations are ready. Submit to start your journey!
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
-      </View>
-    )
+    );
   }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#F5FCFF',
   },
-  autoContainer: {
-    alignItems: 'baseline',
-    height: '20%',
+  scrollContainer: {
+    flex: 1,
+    paddingVertical: 16,
   },
-  textInputContainer: {
-    backgroundColor: 'black',
-    borderTopWidth: 500,
-    borderBottomWidth: 0
+  welcome: {
+    fontSize: 20,
+    textAlign: 'center',
+    margin: 16,
+    fontWeight: '600',
+    color: '#333',
   },
-  textInput: {
-
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
   },
-  predefinedPlacesDescription: {
-    color: '#1faadb',
+  submitPrompt: {
+    backgroundColor: '#D4EDDA',
+    borderRadius: 8,
+    padding: 12,
+    margin: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#28A745',
+  },
+  submitPromptText: {
+    color: '#155724',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 
 AppRegistry.registerComponent('WeatherAlongRoute', () => LandingPage);
-AppRegistry.registerComponent('autocompleteComponent', (placeholder) => LandingPage);
