@@ -1,23 +1,56 @@
 {
-  "name": "test",
+  "name": "weather-along-route",
   "version": "0.0.1",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "start": "node node_modules/react-native/local-cli/cli.js start",
-    "test": "jest"
+    "test": "jest",
+    "electron": "concurrently \"npm start\" \"webpack --config webpack.config.js --watch\" \"electron .\"",
+    "electron:dev": "cross-env NODE_ENV=development electron electron/dev-app.js",
+    "electron:hot": "cross-env NODE_ENV=development ELECTRON_HOT=true concurrently \"npm start\" \"webpack serve --config webpack.config.js\" \"electron .\"",
+    "electron:build": "webpack --config webpack.config.js && electron-builder"
   },
   "dependencies": {
     "react": "16.0.0-alpha.12",
     "react-native": "0.48.2",
-    "react-native-google-places-autocomplete": "^1.3.4"
+    "react-native-google-places-autocomplete": "^1.3.4",
+    "react-native-web": "^0.17.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.14.0",
+    "@babel/preset-env": "^7.14.0",
+    "@babel/preset-react": "^7.13.13",
     "babel-jest": "21.0.2",
+    "babel-loader": "^8.2.2",
     "babel-preset-react-native": "3.0.2",
+    "concurrently": "^6.2.0",
+    "cross-env": "^7.0.3",
+    "css-loader": "^5.2.4",
+    "electron": "^13.1.0",
+    "electron-builder": "^22.10.5",
+    "html-webpack-plugin": "^5.3.1",
     "jest": "21.0.2",
-    "react-test-renderer": "16.0.0-alpha.12"
+    "react-test-renderer": "16.0.0-alpha.12",
+    "style-loader": "^2.0.0",
+    "webpack": "^5.36.2",
+    "webpack-cli": "^4.7.0",
+    "webpack-dev-server": "^3.11.2"
   },
   "jest": {
     "preset": "react-native"
+  },
+  "build": {
+    "appId": "com.electron.weatheralongRoute",
+    "productName": "Weather Along Route",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
   }
 }
